@@ -28,9 +28,9 @@ uint8_t dht20_crc8(const uint8_t *data, uint8_t len) {
 		crc ^= data[i];
 		for (uint8_t bit = 0; bit < 8; bit++) {
 			if (crc & 0x80u) {
-				crc = (uint8_t)((crc << 1) ^ 0x31u);
+				crc = (uint8_t) ((crc << 1) ^ 0x31u);
 			} else {
-				crc = (uint8_t)(crc << 1);
+				crc = (uint8_t) (crc << 1);
 			}
 		}
 	}
@@ -49,15 +49,13 @@ int dht20_parse_raw(const uint8_t raw[7], int *out_temp, int *out_humi) {
 		return 0;
 	}
 
-	uint32_t s_rh = ((uint32_t)raw[1] << 12) |
-	                ((uint32_t)raw[2] << 4)  |
-	                ((uint32_t)raw[3] >> 4);
-	uint32_t s_t  = (((uint32_t)raw[3] & 0x0Fu) << 16) |
-	                ((uint32_t)raw[4] << 8)            |
-	                (uint32_t)raw[5];
+	uint32_t s_rh = ((uint32_t) raw[1] << 12) | ((uint32_t) raw[2] << 4)
+			| ((uint32_t) raw[3] >> 4);
+	uint32_t s_t = (((uint32_t) raw[3] & 0x0Fu) << 16)
+			| ((uint32_t) raw[4] << 8) | (uint32_t) raw[5];
 
-	int humi = (int)((s_rh * 100ULL) >> 20);
-	int temp = (int)((s_t * 200ULL) >> 20) - 50;
+	int humi = (int) ((s_rh * 100ULL) >> 20);
+	int temp = (int) ((s_t * 200ULL) >> 20) - 50;
 
 	if (out_temp != NULL) {
 		*out_temp = temp;
@@ -68,63 +66,77 @@ int dht20_parse_raw(const uint8_t raw[7], int *out_temp, int *out_humi) {
 	return 1;
 }
 
+static void dht20_hw_check_status(void) {
+#ifndef UNIT_TEST
+	uint8_t cmd = 0x71u;
+	uint8_t status_byte = 0u;
+	if (HAL_I2C_Master_Transmit(&hi2c1, DHT20_I2C_ADDR, &cmd, 1,
+	DHT20_I2C_TIMEOUT_MS) == HAL_OK) {
+		HAL_I2C_Master_Receive(&hi2c1, DHT20_I2C_ADDR, &status_byte, 1,
+		DHT20_I2C_TIMEOUT_MS);
+	}
+	(void) status_byte;
+#endif
+}
+
+static void dht20_hw_send_trigger(void) {
+#ifndef UNIT_TEST
+	uint8_t trig_cmd[3] = { 0xACu, 0x33u, 0x00u };
+	HAL_I2C_Master_Transmit(&hi2c1, DHT20_I2C_ADDR, trig_cmd, 3,
+	DHT20_I2C_TIMEOUT_MS);
+#endif
+}
+
+static void dht20_hw_read_and_convert(void) {
+#ifndef UNIT_TEST
+	uint8_t raw[7] = { 0 };
+	if (HAL_I2C_Master_Receive(&hi2c1, DHT20_I2C_ADDR, raw, 7,
+	DHT20_I2C_TIMEOUT_MS) == HAL_OK) {
+		int t = 0;
+		int h = 0;
+		if (dht20_parse_raw(raw, &t, &h)) {
+			temperature = t;
+			humidity = h;
+		}
+	}
+#endif
+}
+
 void dht20_read(void) {
 	switch (dht20_state) {
-	case DHT20_STATE_INIT: {
-#ifndef UNIT_TEST
-		uint8_t cmd = 0x71u;
-		uint8_t status_byte = 0u;
-		if (HAL_I2C_Master_Transmit(&hi2c1, DHT20_I2C_ADDR, &cmd, 1, DHT20_I2C_TIMEOUT_MS) == HAL_OK) {
-			HAL_I2C_Master_Receive(&hi2c1, DHT20_I2C_ADDR, &status_byte, 1, DHT20_I2C_TIMEOUT_MS);
-		}
-		(void)status_byte;
-#endif
+	case DHT20_STATE_INIT:
+		dht20_hw_check_status();
 		setTimer(DHT20_TIMER_CH, 100);
 		dht20_state = DHT20_STATE_TRIGGER;
 		break;
-	}
 
 	case DHT20_STATE_IDLE:
 		if (timer_flag[DHT20_TIMER_CH] == 1) {
 			dht20_state = DHT20_STATE_TRIGGER;
+			break;
 		}
 		break;
 
-	case DHT20_STATE_TRIGGER: {
-#ifndef UNIT_TEST
-		uint8_t trig_cmd[3] = { 0xACu, 0x33u, 0x00u };
-		HAL_I2C_Master_Transmit(&hi2c1, DHT20_I2C_ADDR, trig_cmd, 3, DHT20_I2C_TIMEOUT_MS);
-#endif
-		setTimer(DHT20_TIMER_CH, 100); /* >= 80 ms datasheet conversion wait */
+	case DHT20_STATE_TRIGGER:
+		dht20_hw_send_trigger();
+		setTimer(DHT20_TIMER_CH, 100);
 		dht20_state = DHT20_STATE_WAIT;
 		break;
-	}
 
 	case DHT20_STATE_WAIT:
 		if (timer_flag[DHT20_TIMER_CH] == 1) {
 			dht20_state = DHT20_STATE_READ;
+			break;
 		}
 		break;
 
-	case DHT20_STATE_READ: {
-#ifndef UNIT_TEST
-		uint8_t raw[7] = { 0 };
-		if (HAL_I2C_Master_Receive(&hi2c1, DHT20_I2C_ADDR, raw, 7, DHT20_I2C_TIMEOUT_MS) == HAL_OK) {
-			int t = 0;
-			int h = 0;
-			if (dht20_parse_raw(raw, &t, &h)) {
-				temperature = t;
-				humidity = h;
-			}
-		}
-#endif
+	case DHT20_STATE_READ:
+		dht20_hw_read_and_convert();
 		setTimer(DHT20_TIMER_CH, 2000);
 		dht20_state = DHT20_STATE_IDLE;
 		break;
-	}
 
 	default:
-		dht20_state = DHT20_STATE_INIT;
 		break;
 	}
 }

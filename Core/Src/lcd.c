@@ -24,7 +24,7 @@ static uint8_t boot_msg_active = 0;
 static int cursor_row = 0;
 static int cursor_col = 0;
 static uint8_t lcd_i2c_addr = 0;
-static uint8_t next_flush_row = 0;
+static uint8_t lcd_state = LCD_STATE_ROW0;
 
 static void lcd_set_line(int row, const char *text) {
 	if (row < 0 || row >= LCD_ROWS || text == NULL) {
@@ -86,7 +86,7 @@ void lcd_init(void) {
 	boot_msg_active = 0;
 	cursor_row = 0;
 	cursor_col = 0;
-	next_flush_row = 0;
+	lcd_state = LCD_STATE_ROW0;
 	lcd_i2c_addr = 0;
 
 #ifndef UNIT_TEST
@@ -238,26 +238,54 @@ void lcd_update_setting(int color_mode, int val) {
 	lcd_set_line(1, "B2:+ B3:- B4:OK ");
 }
 
-void lcd_update(void) {
-	for (int attempt = 0; attempt < LCD_ROWS; attempt++) {
-		int row = (next_flush_row + attempt) % LCD_ROWS;
-		if (row_dirty[row]) {
-			row_dirty[row] = 0;
-			next_flush_row = (uint8_t)((row + 1) % LCD_ROWS);
+static int lcd_is_row_dirty(int row) {
+	if (row < 0 || row >= LCD_ROWS) {
+		return 0;
+	}
+	return row_dirty[row] != 0;
+}
+
+static void lcd_hw_flush_row(int row) {
+	if (row < 0 || row >= LCD_ROWS) {
+		return;
+	}
+	row_dirty[row] = 0;
 #ifndef UNIT_TEST
-			if (lcd_i2c_addr != 0u) {
-				uint8_t ddram_cmd = (uint8_t)(0x80u | (row == 0 ? 0x00u : 0x40u));
-				if (lcd_write_byte(ddram_cmd, 0) == HAL_OK) {
-					for (int col = 0; col < LCD_COLS; col++) {
-						if (lcd_write_byte((uint8_t)lcd_buf[row][col], 1) != HAL_OK) {
-							break;
-						}
-					}
+	if (lcd_i2c_addr != 0u) {
+		uint8_t ddram_cmd = (uint8_t)(0x80u | (row == 0 ? 0x00u : 0x40u));
+		if (lcd_write_byte(ddram_cmd, 0) == HAL_OK) {
+			for (int col = 0; col < LCD_COLS; col++) {
+				if (lcd_write_byte((uint8_t)lcd_buf[row][col], 1) != HAL_OK) {
+					break;
 				}
 			}
-#endif
-			break; /* Flush at most 1 dirty row per periodic tick */
 		}
+	}
+#endif
+}
+
+void lcd_update(void) {
+	switch (lcd_state) {
+	case LCD_STATE_ROW0:
+		if (lcd_is_row_dirty(0)) {
+			lcd_hw_flush_row(0);
+			lcd_state = LCD_STATE_ROW1;
+			break;
+		}
+		lcd_state = LCD_STATE_ROW1;
+		break;
+
+	case LCD_STATE_ROW1:
+		if (lcd_is_row_dirty(1)) {
+			lcd_hw_flush_row(1);
+			lcd_state = LCD_STATE_ROW0;
+			break;
+		}
+		lcd_state = LCD_STATE_ROW0;
+		break;
+
+	default:
+		break;
 	}
 }
 

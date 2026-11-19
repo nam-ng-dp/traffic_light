@@ -5,59 +5,121 @@
 #include "button.h"
 #include "software_timer.h"
 
-typedef struct {
-	int state;
-	void (*set_lights)(void);
-	int phase_id;
-} ManualPhase;
-
-static const ManualPhase manual_phases[] = {
-	{ STATUS_MAN_RED_GREEN,  setTraffic_RedGreen,  1 },
-	{ STATUS_MAN_RED_YELLOW, setTraffic_RedYellow, 2 },
-	{ STATUS_MAN_GREEN_RED,  setTraffic_GreenRed,  3 },
-	{ STATUS_MAN_YELLOW_RED, setTraffic_YellowRed, 4 }
-};
-
 void fsm_manual(void) {
-	int idx = -1;
-	int num_phases = (int)(sizeof(manual_phases) / sizeof(manual_phases[0]));
-	for (int i = 0; i < num_phases; i++) {
-		if (manual_phases[i].state == status) {
-			idx = i;
+	switch (status) {
+	case STATUS_MAN_RED_GREEN:
+		if (isButtonPressed(0)) {
+			status = STATUS_SET_RED;
+			temp_time = red_time;
+			turnOffAllTrafficLights();
+			toggleRed();
+			setTimer(1, 250);
+			lcd_update_setting(STATUS_SET_RED, temp_time);
 			break;
 		}
-	}
-	if (idx < 0) {
-		return;
-	}
+		if (isButtonPressed(1)) {
+			status = STATUS_MAN_RED_YELLOW;
+			setTraffic_RedYellow();
+			lcd_update_manual(2);
+			break;
+		}
+		if (isButtonPressed(2)) {
+			status = STATUS_MAN_YELLOW_RED;
+			setTraffic_YellowRed();
+			lcd_update_manual(4);
+			break;
+		}
+		if (isButtonPressed(3)) {
+			fsm_automatic_init();
+			break;
+		}
+		break;
 
-	if (isButtonPressed(0)) {
-		status = STATUS_SET_RED;
-		temp_time = red_time;
-		turnOffAllTrafficLights();
-		toggleRed();
-		setTimer(1, 250);
-		lcd_update_setting(STATUS_SET_RED, temp_time);
-		return;
-	}
+	case STATUS_MAN_RED_YELLOW:
+		if (isButtonPressed(0)) {
+			status = STATUS_SET_RED;
+			temp_time = red_time;
+			turnOffAllTrafficLights();
+			toggleRed();
+			setTimer(1, 250);
+			lcd_update_setting(STATUS_SET_RED, temp_time);
+			break;
+		}
+		if (isButtonPressed(1)) {
+			status = STATUS_MAN_GREEN_RED;
+			setTraffic_GreenRed();
+			lcd_update_manual(3);
+			break;
+		}
+		if (isButtonPressed(2)) {
+			status = STATUS_MAN_RED_GREEN;
+			setTraffic_RedGreen();
+			lcd_update_manual(1);
+			break;
+		}
+		if (isButtonPressed(3)) {
+			fsm_automatic_init();
+			break;
+		}
+		break;
 
-	if (isButtonPressed(1)) {
-		int next = (idx + 1) % num_phases;
-		status = manual_phases[next].state;
-		manual_phases[next].set_lights();
-		lcd_update_manual(manual_phases[next].phase_id);
-		return;
-	}
+	case STATUS_MAN_GREEN_RED:
+		if (isButtonPressed(0)) {
+			status = STATUS_SET_RED;
+			temp_time = red_time;
+			turnOffAllTrafficLights();
+			toggleRed();
+			setTimer(1, 250);
+			lcd_update_setting(STATUS_SET_RED, temp_time);
+			break;
+		}
+		if (isButtonPressed(1)) {
+			status = STATUS_MAN_YELLOW_RED;
+			setTraffic_YellowRed();
+			lcd_update_manual(4);
+			break;
+		}
+		if (isButtonPressed(2)) {
+			status = STATUS_MAN_RED_YELLOW;
+			setTraffic_RedYellow();
+			lcd_update_manual(2);
+			break;
+		}
+		if (isButtonPressed(3)) {
+			fsm_automatic_init();
+			break;
+		}
+		break;
 
-	if (isButtonPressed(2)) {
-		int prev = (idx + num_phases - 1) % num_phases;
-		status = manual_phases[prev].state;
-		manual_phases[prev].set_lights();
-		lcd_update_manual(manual_phases[prev].phase_id);
-		return;
-	}
+	case STATUS_MAN_YELLOW_RED:
+		if (isButtonPressed(0)) {
+			status = STATUS_SET_RED;
+			temp_time = red_time;
+			turnOffAllTrafficLights();
+			toggleRed();
+			setTimer(1, 250);
+			lcd_update_setting(STATUS_SET_RED, temp_time);
+			break;
+		}
+		if (isButtonPressed(1)) {
+			status = STATUS_MAN_RED_GREEN;
+			setTraffic_RedGreen();
+			lcd_update_manual(1);
+			break;
+		}
+		if (isButtonPressed(2)) {
+			status = STATUS_MAN_GREEN_RED;
+			setTraffic_GreenRed();
+			lcd_update_manual(3);
+			break;
+		}
+		if (isButtonPressed(3)) {
+			fsm_automatic_init();
+			break;
+		}
+		break;
 
-	if (isButtonPressed(3)) {
-		fsm_automatic_init();
+	default:
+		break;
 	}
 }

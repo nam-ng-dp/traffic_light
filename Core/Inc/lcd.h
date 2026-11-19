@@ -1,6 +1,9 @@
 #ifndef INC_LCD_H_
 #define INC_LCD_H_
 
+#define LCD_STATE_ROW0 0
+#define LCD_STATE_ROW1 1
+
 void lcd_init(void);
 void lcd_clear(void);
 void lcd_goto(int row, int col);

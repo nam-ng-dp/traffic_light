@@ -5,75 +5,109 @@
 #include "software_timer.h"
 #include "button.h"
 
-typedef struct {
-	int state;
-	int *target_time;
-	void (*toggle_led)(void);
-} SettingConfig;
+static void increaseTempTime(void) {
+	temp_time = (temp_time >= 99) ? 1 : (temp_time + 1);
+}
 
-static const SettingConfig setting_configs[] = {
-	{ STATUS_SET_RED,   &red_time,   toggleRed   },
-	{ STATUS_SET_AMBER, &amber_time, toggleAmber },
-	{ STATUS_SET_GREEN, &green_time, toggleGreen }
-};
+static void decreaseTempTime(void) {
+	temp_time = (temp_time <= 1) ? 99 : (temp_time - 1);
+}
 
 void fsm_setting(void) {
-	int idx = -1;
-	int num_configs = (int)(sizeof(setting_configs) / sizeof(setting_configs[0]));
-	for (int i = 0; i < num_configs; i++) {
-		if (setting_configs[i].state == status) {
-			idx = i;
+	switch (status) {
+	case STATUS_SET_RED:
+		if (isButtonPressed(0)) {
+			status = STATUS_SET_AMBER;
+			temp_time = amber_time;
+			turnOffAllTrafficLights();
+			toggleAmber();
+			setTimer(1, 250);
+			lcd_update_setting(STATUS_SET_AMBER, temp_time);
 			break;
 		}
-	}
-	if (idx < 0) {
-		return;
-	}
+		if (isButtonPressed(1)) {
+			increaseTempTime();
+			lcd_update_setting(STATUS_SET_RED, temp_time);
+			break;
+		}
+		if (isButtonPressed(2)) {
+			decreaseTempTime();
+			lcd_update_setting(STATUS_SET_RED, temp_time);
+			break;
+		}
+		if (isButtonPressed(3) || isButtonPressed(4)) {
+			red_time = temp_time;
+			lcd_update_setting(STATUS_SET_RED, temp_time);
+			break;
+		}
+		if (timer_flag[1] == 1) {
+			setTimer(1, 250);
+			toggleRed();
+			break;
+		}
+		break;
 
-	const SettingConfig *cfg = &setting_configs[idx];
+	case STATUS_SET_AMBER:
+		if (isButtonPressed(0)) {
+			status = STATUS_SET_GREEN;
+			temp_time = green_time;
+			turnOffAllTrafficLights();
+			toggleGreen();
+			setTimer(1, 250);
+			lcd_update_setting(STATUS_SET_GREEN, temp_time);
+			break;
+		}
+		if (isButtonPressed(1)) {
+			increaseTempTime();
+			lcd_update_setting(STATUS_SET_AMBER, temp_time);
+			break;
+		}
+		if (isButtonPressed(2)) {
+			decreaseTempTime();
+			lcd_update_setting(STATUS_SET_AMBER, temp_time);
+			break;
+		}
+		if (isButtonPressed(3) || isButtonPressed(4)) {
+			amber_time = temp_time;
+			lcd_update_setting(STATUS_SET_AMBER, temp_time);
+			break;
+		}
+		if (timer_flag[1] == 1) {
+			setTimer(1, 250);
+			toggleAmber();
+			break;
+		}
+		break;
 
-	if (isButtonPressed(0)) {
-		if (idx == num_configs - 1) {
+	case STATUS_SET_GREEN:
+		if (isButtonPressed(0)) {
 			turnOffAllTrafficLights();
 			fsm_automatic_init();
-			return;
+			break;
 		}
-		const SettingConfig *next = &setting_configs[idx + 1];
-		status = next->state;
-		temp_time = *(next->target_time);
-		turnOffAllTrafficLights();
-		next->toggle_led();
-		setTimer(1, 250);
-		lcd_update_setting(next->state, temp_time);
-		return;
-	}
-
-	if (isButtonPressed(1)) {
-		temp_time++;
-		if (temp_time > 99) {
-			temp_time = 1;
+		if (isButtonPressed(1)) {
+			increaseTempTime();
+			lcd_update_setting(STATUS_SET_GREEN, temp_time);
+			break;
 		}
-		lcd_update_setting(cfg->state, temp_time);
-		return;
-	}
-
-	if (isButtonPressed(2)) {
-		temp_time--;
-		if (temp_time < 1) {
-			temp_time = 99;
+		if (isButtonPressed(2)) {
+			decreaseTempTime();
+			lcd_update_setting(STATUS_SET_GREEN, temp_time);
+			break;
 		}
-		lcd_update_setting(cfg->state, temp_time);
-		return;
-	}
+		if (isButtonPressed(3) || isButtonPressed(4)) {
+			green_time = temp_time;
+			lcd_update_setting(STATUS_SET_GREEN, temp_time);
+			break;
+		}
+		if (timer_flag[1] == 1) {
+			setTimer(1, 250);
+			toggleGreen();
+			break;
+		}
+		break;
 
-	if (isButtonPressed(3) || isButtonPressed(4)) {
-		*(cfg->target_time) = temp_time;
-		lcd_update_setting(cfg->state, temp_time);
-		return;
-	}
-
-	if (timer_flag[1] == 1) {
-		setTimer(1, 250);
-		cfg->toggle_led();
+	default:
+		break;
 	}
 }
