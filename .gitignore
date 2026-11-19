@@ -9,3 +9,8 @@ Release/
 *.bin
 .metadata/
 MXTmpFiles/
+.settings/language.settings.xml
+.settings/stm32cubeide.project.prefs
+*.launch
+*.log
+*.bak
