@@ -3,6 +3,9 @@
 
 #include "global.h"
 
+/**
+ * @brief Run Manual mode state machine.
+ */
 void fsm_manual(void);
 
 #endif /* INC_FSM_MANUAL_H_ */

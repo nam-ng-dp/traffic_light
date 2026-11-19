@@ -21,4 +21,4 @@ void SCH_Dispatch_Tasks(void);
 uint32_t SCH_Add_Task(void (*pFunction)(void), uint32_t DELAY, uint32_t PERIOD);
 uint8_t SCH_Delete_Task(uint32_t taskID);
 
-#endif
+#endif /* INC_SCHEDULER_H_ */

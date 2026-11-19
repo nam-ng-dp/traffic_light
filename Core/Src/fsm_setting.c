@@ -1,113 +1,79 @@
 #include "fsm_setting.h"
 #include "fsm_automatic.h"
 #include "traffic_light.h"
-#include "led7seg.h"
+#include "lcd.h"
 #include "software_timer.h"
 #include "button.h"
 
+typedef struct {
+	int state;
+	int *target_time;
+	void (*toggle_led)(void);
+} SettingConfig;
+
+static const SettingConfig setting_configs[] = {
+	{ STATUS_SET_RED,   &red_time,   toggleRed   },
+	{ STATUS_SET_AMBER, &amber_time, toggleAmber },
+	{ STATUS_SET_GREEN, &green_time, toggleGreen }
+};
+
 void fsm_setting(void) {
-	switch (status) {
-	case STATUS_SET_RED:
-		// Transition 1: Button 1 cycles to SET_AMBER
-		if (isButtonPressed(0)) {
-			status = STATUS_SET_AMBER;
-			temp_time = amber_time;
-			turnOffAllTrafficLights();
-			toggleAmber();
-			setTimer(1, 250);
-			updateMode7SEG(temp_time, 3);
+	int idx = -1;
+	int num_configs = (int)(sizeof(setting_configs) / sizeof(setting_configs[0]));
+	for (int i = 0; i < num_configs; i++) {
+		if (setting_configs[i].state == status) {
+			idx = i;
 			break;
 		}
-		// Transition 2: Button 2 increments value (1 - 99)
-		if (isButtonPressed(1)) {
-			temp_time++;
-			if (temp_time > 99) {
-				temp_time = 1;
-			}
-			updateMode7SEG(temp_time, 2);
-			break;
-		}
-		// Transition 3: Button 3 saves red_time
-		if (isButtonPressed(2)) {
-			red_time = temp_time;
-			break;
-		}
-		// Transition 4 (Self-loop): 2Hz blinking Red LEDs
-		if (timer_flag[1] == 1) {
-			setTimer(1, 250);
-			toggleRed();
-			break;
-		}
-		break;
+	}
+	if (idx < 0) {
+		return;
+	}
 
-	case STATUS_SET_AMBER:
-		// Transition 1: Button 1 cycles to SET_GREEN
-		if (isButtonPressed(0)) {
-			status = STATUS_SET_GREEN;
-			temp_time = green_time;
-			turnOffAllTrafficLights();
-			toggleGreen();
-			setTimer(1, 250);
-			updateMode7SEG(temp_time, 4);
-			break;
-		}
-		// Transition 2: Button 2 increments value (1 - 99)
-		if (isButtonPressed(1)) {
-			temp_time++;
-			if (temp_time > 99) {
-				temp_time = 1;
-			}
-			updateMode7SEG(temp_time, 3);
-			break;
-		}
-		// Transition 3: Button 3 saves amber_time
-		if (isButtonPressed(2)) {
-			amber_time = temp_time;
-			break;
-		}
-		// Transition 4 (Self-loop): 2Hz blinking Amber LEDs
-		if (timer_flag[1] == 1) {
-			setTimer(1, 250);
-			toggleAmber();
-			break;
-		}
-		break;
+	const SettingConfig *cfg = &setting_configs[idx];
 
-	case STATUS_SET_GREEN:
-		// Transition 1: Button 1 finishes setting and returns to Automatic mode
-		if (isButtonPressed(0)) {
+	if (isButtonPressed(0)) {
+		if (idx == num_configs - 1) {
 			turnOffAllTrafficLights();
-			if (red_time <= amber_time) {
-				red_time = amber_time + green_time;
-			} else {
-				green_time = red_time - amber_time;
-			}
 			fsm_automatic_init();
-			break;
+			return;
 		}
-		// Transition 2: Button 2 increments value (1 - 99)
-		if (isButtonPressed(1)) {
-			temp_time++;
-			if (temp_time > 99) {
-				temp_time = 1;
-			}
-			updateMode7SEG(temp_time, 4);
-			break;
-		}
-		// Transition 3: Button 3 saves green_time
-		if (isButtonPressed(2)) {
-			green_time = temp_time;
-			break;
-		}
-		// Transition 4 (Self-loop): 2Hz blinking Green LEDs
-		if (timer_flag[1] == 1) {
-			setTimer(1, 250);
-			toggleGreen();
-			break;
-		}
-		break;
+		const SettingConfig *next = &setting_configs[idx + 1];
+		status = next->state;
+		temp_time = *(next->target_time);
+		turnOffAllTrafficLights();
+		next->toggle_led();
+		setTimer(1, 250);
+		lcd_update_setting(next->state, temp_time);
+		return;
+	}
 
-	default:
-		break;
+	if (isButtonPressed(1)) {
+		temp_time++;
+		if (temp_time > 99) {
+			temp_time = 1;
+		}
+		lcd_update_setting(cfg->state, temp_time);
+		return;
+	}
+
+	if (isButtonPressed(2)) {
+		temp_time--;
+		if (temp_time < 1) {
+			temp_time = 99;
+		}
+		lcd_update_setting(cfg->state, temp_time);
+		return;
+	}
+
+	if (isButtonPressed(3) || isButtonPressed(4)) {
+		*(cfg->target_time) = temp_time;
+		lcd_update_setting(cfg->state, temp_time);
+		return;
+	}
+
+	if (timer_flag[1] == 1) {
+		setTimer(1, 250);
+		cfg->toggle_led();
 	}
 }

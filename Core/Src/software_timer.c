@@ -1,6 +1,6 @@
 #include "software_timer.h"
 
-int TIMER_CYCLE = 10; // Timer interrupt period in ms (default TIM2 = 10ms)
+int TIMER_CYCLE = 10; /* Timer interrupt period in ms (default TIM2 = 10ms) */
 int timer_counter[MAX_TIMER] = { 0 };
 int timer_flag[MAX_TIMER] = { 0 };
 
@@ -20,6 +20,13 @@ void setTimer(int index, int duration) {
 			ticks = 1;
 		}
 		timer_counter[index] = ticks;
+		timer_flag[index] = 0;
+	}
+}
+
+void clearTimer(int index) {
+	if (index >= 0 && index < MAX_TIMER) {
+		timer_counter[index] = 0;
 		timer_flag[index] = 0;
 	}
 }

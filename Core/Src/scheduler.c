@@ -1,11 +1,14 @@
 #include "scheduler.h"
+#ifndef UNIT_TEST
 #include "main.h"
+#endif
 #include <string.h>
 
 sTask SCH_tasks_G[SCH_MAX_TASKS];
 uint8_t SCH_count = 0;
 static uint32_t new_task_id = 0;
 
+#ifndef UNIT_TEST
 static inline uint32_t SCH_Lock(void) {
 	uint32_t primask = __get_PRIMASK();
 	__disable_irq();
@@ -15,6 +18,15 @@ static inline uint32_t SCH_Lock(void) {
 static inline void SCH_Unlock(uint32_t primask) {
 	__set_PRIMASK(primask);
 }
+#else
+static inline uint32_t SCH_Lock(void) {
+	return 0;
+}
+
+static inline void SCH_Unlock(uint32_t primask) {
+	(void)primask;
+}
+#endif
 
 static uint32_t Get_New_Task_ID(void) {
 	new_task_id++;
@@ -61,7 +73,9 @@ void SCH_Init(void) {
 }
 
 void SCH_Update(void) {
-	if (SCH_count == 0) return;
+	if (SCH_count == 0) {
+		return;
+	}
 	if (SCH_tasks_G[0].Delay > 0) {
 		SCH_tasks_G[0].Delay--;
 	}
@@ -71,17 +85,25 @@ void SCH_Update(void) {
 }
 
 uint32_t SCH_Add_Task(void (*pFunction)(void), uint32_t DELAY, uint32_t PERIOD) {
-	if (pFunction == 0) return NO_TASK_ID;
+	if (pFunction == 0) {
+		return NO_TASK_ID;
+	}
 	uint32_t delay = DELAY / TICK;
 	uint32_t period = PERIOD / TICK;
-	if (DELAY > 0 && delay == 0) delay = 1;
-	if (PERIOD > 0 && period == 0) period = 1;
+	if (DELAY > 0 && delay == 0) {
+		delay = 1;
+	}
+	if (PERIOD > 0 && period == 0) {
+		period = 1;
+	}
 	uint32_t id = Get_New_Task_ID();
 	return Insert(pFunction, delay, period, id);
 }
 
 uint8_t SCH_Delete_Task(uint32_t taskID) {
-	if (taskID == NO_TASK_ID) return 0;
+	if (taskID == NO_TASK_ID) {
+		return 0;
+	}
 	uint32_t m = SCH_Lock();
 	for (uint8_t i = 0; i < SCH_count; i++) {
 		if (SCH_tasks_G[i].TaskID == taskID) {

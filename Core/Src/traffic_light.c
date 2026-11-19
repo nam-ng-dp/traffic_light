@@ -1,114 +1,105 @@
 #include "traffic_light.h"
+#include <stdint.h>
 
-/**
- * @brief Semantic control: Phase 1 - Road 1 RED, Road 2 GREEN.
+#ifndef UNIT_TEST
+#include "main.h"
+#endif
+
+/*
+ * 2-bit encoded traffic light lookup table: { pin_A, pin_B }
+ * Adjust rows here if Step 3.2 hardware test reveals different wiring/polarity.
  */
+typedef struct {
+	uint8_t bit_a;
+	uint8_t bit_b;
+} TrafficPinCode_t;
+
+static const TrafficPinCode_t TRAFFIC_LUT[4] = {
+	{ 0, 0 }, /* TRAFFIC_OFF   */
+	{ 0, 1 }, /* TRAFFIC_GREEN */
+	{ 1, 0 }, /* TRAFFIC_AMBER */
+	{ 1, 1 }  /* TRAFFIC_RED   */
+};
+
+static int lane1_color = TRAFFIC_OFF;
+static int lane2_color = TRAFFIC_OFF;
+
+static void traffic_toggle_color(int color) {
+	int next = (lane1_color == color && lane2_color == color) ? TRAFFIC_OFF : color;
+	traffic_set(TRAFFIC_LANE_1, next);
+	traffic_set(TRAFFIC_LANE_2, next);
+}
+
+void traffic_set(int lane, int color) {
+	if (color < TRAFFIC_OFF || color > TRAFFIC_RED) {
+		color = TRAFFIC_OFF;
+	}
+
+#ifndef UNIT_TEST
+	GPIO_PinState pin_a = TRAFFIC_LUT[color].bit_a ? GPIO_PIN_SET : GPIO_PIN_RESET;
+	GPIO_PinState pin_b = TRAFFIC_LUT[color].bit_b ? GPIO_PIN_SET : GPIO_PIN_RESET;
+#else
+	(void)TRAFFIC_LUT;
+#endif
+
+	if (lane == TRAFFIC_LANE_1) {
+		lane1_color = color;
+#ifndef UNIT_TEST
+		HAL_GPIO_WritePin(TL1_A_GPIO_Port, TL1_A_Pin, pin_a);
+		HAL_GPIO_WritePin(TL1_B_GPIO_Port, TL1_B_Pin, pin_b);
+#endif
+	} else if (lane == TRAFFIC_LANE_2) {
+		lane2_color = color;
+#ifndef UNIT_TEST
+		HAL_GPIO_WritePin(TL2_A_GPIO_Port, TL2_A_Pin, pin_a);
+		HAL_GPIO_WritePin(TL2_B_GPIO_Port, TL2_B_Pin, pin_b);
+#endif
+	}
+}
+
+int traffic_get(int lane) {
+	if (lane == TRAFFIC_LANE_1) {
+		return lane1_color;
+	}
+	if (lane == TRAFFIC_LANE_2) {
+		return lane2_color;
+	}
+	return TRAFFIC_OFF;
+}
+
 void setTraffic_RedGreen(void) {
-	setDir1Light(GPIO_PIN_RESET, GPIO_PIN_SET, GPIO_PIN_SET);
-	setDir2Light(GPIO_PIN_SET, GPIO_PIN_SET, GPIO_PIN_RESET);
+	traffic_set(TRAFFIC_LANE_1, TRAFFIC_RED);
+	traffic_set(TRAFFIC_LANE_2, TRAFFIC_GREEN);
 }
 
-/**
- * @brief Semantic control: Phase 2 - Road 1 RED, Road 2 YELLOW.
- */
 void setTraffic_RedYellow(void) {
-	setDir1Light(GPIO_PIN_RESET, GPIO_PIN_SET, GPIO_PIN_SET);
-	setDir2Light(GPIO_PIN_SET, GPIO_PIN_RESET, GPIO_PIN_SET);
+	traffic_set(TRAFFIC_LANE_1, TRAFFIC_RED);
+	traffic_set(TRAFFIC_LANE_2, TRAFFIC_AMBER);
 }
 
-/**
- * @brief Semantic control: Phase 3 - Road 1 GREEN, Road 2 RED.
- */
 void setTraffic_GreenRed(void) {
-	setDir1Light(GPIO_PIN_SET, GPIO_PIN_SET, GPIO_PIN_RESET);
-	setDir2Light(GPIO_PIN_RESET, GPIO_PIN_SET, GPIO_PIN_SET);
+	traffic_set(TRAFFIC_LANE_1, TRAFFIC_GREEN);
+	traffic_set(TRAFFIC_LANE_2, TRAFFIC_RED);
 }
 
-/**
- * @brief Semantic control: Phase 4 - Road 1 YELLOW, Road 2 RED.
- */
 void setTraffic_YellowRed(void) {
-	setDir1Light(GPIO_PIN_SET, GPIO_PIN_RESET, GPIO_PIN_SET);
-	setDir2Light(GPIO_PIN_RESET, GPIO_PIN_SET, GPIO_PIN_SET);
+	traffic_set(TRAFFIC_LANE_1, TRAFFIC_AMBER);
+	traffic_set(TRAFFIC_LANE_2, TRAFFIC_RED);
 }
 
-/**
- * @brief Control Road 1 (North-South) traffic lights (Active-low: RESET = ON, SET = OFF).
- */
-void setDir1Light(GPIO_PinState red, GPIO_PinState yellow, GPIO_PinState green) {
-#ifdef LAB4_6PIN_HARDWARE
-	HAL_GPIO_WritePin(GPIOA, RED1_Pin, red);
-	HAL_GPIO_WritePin(GPIOA, YELLOW1_Pin, yellow);
-	HAL_GPIO_WritePin(GPIOA, GREEN1_Pin, green);
-#else
-	(void)red;
-	(void)yellow;
-	(void)green;
-	// TODO: Map Road 1 traffic light to XNUCLEO-F103RB 2-bit pins (TL1_A_GPIO_Port/Pin, TL1_B_GPIO_Port/Pin)
-#endif
-}
-
-/**
- * @brief Control Road 2 (East-West) traffic lights (Active-low: RESET = ON, SET = OFF).
- */
-void setDir2Light(GPIO_PinState red, GPIO_PinState yellow, GPIO_PinState green) {
-#ifdef LAB4_6PIN_HARDWARE
-	HAL_GPIO_WritePin(GPIOA, RED2_Pin, red);
-	HAL_GPIO_WritePin(GPIOA, YELLOW2_Pin, yellow);
-	HAL_GPIO_WritePin(GPIOA, GREEN2_Pin, green);
-#else
-	(void)red;
-	(void)yellow;
-	(void)green;
-	// TODO: Map Road 2 traffic light to XNUCLEO-F103RB 2-bit pins (TL2_A_GPIO_Port/Pin, TL2_B_GPIO_Port/Pin)
-#endif
-}
-
-/**
- * @brief Turn off all traffic light LEDs in both directions.
- */
 void turnOffAllTrafficLights(void) {
-#ifdef LAB4_6PIN_HARDWARE
-	HAL_GPIO_WritePin(GPIOA,
-			RED1_Pin | YELLOW1_Pin | GREEN1_Pin | RED2_Pin | YELLOW2_Pin | GREEN2_Pin,
-			GPIO_PIN_SET);
-#else
-	// TODO: Turn off TL1_A/B and TL2_A/B on XNUCLEO-F103RB hardware
-#endif
+	traffic_set(TRAFFIC_LANE_1, TRAFFIC_OFF);
+	traffic_set(TRAFFIC_LANE_2, TRAFFIC_OFF);
 }
 
-/**
- * @brief Toggle Red LEDs in both directions (2Hz blinking mode), others OFF.
- */
 void toggleRed(void) {
-#ifdef LAB4_6PIN_HARDWARE
-	HAL_GPIO_WritePin(GPIOA, YELLOW1_Pin | GREEN1_Pin | YELLOW2_Pin | GREEN2_Pin, GPIO_PIN_SET);
-	HAL_GPIO_TogglePin(GPIOA, RED1_Pin | RED2_Pin);
-#else
-	// TODO: Toggle Red state on TL1_A/B and TL2_A/B on XNUCLEO-F103RB hardware
-#endif
+	traffic_toggle_color(TRAFFIC_RED);
 }
 
-/**
- * @brief Toggle Amber/Yellow LEDs in both directions (2Hz blinking mode), others OFF.
- */
 void toggleAmber(void) {
-#ifdef LAB4_6PIN_HARDWARE
-	HAL_GPIO_WritePin(GPIOA, RED1_Pin | GREEN1_Pin | RED2_Pin | GREEN2_Pin, GPIO_PIN_SET);
-	HAL_GPIO_TogglePin(GPIOA, YELLOW1_Pin | YELLOW2_Pin);
-#else
-	// TODO: Toggle Amber state on TL1_A/B and TL2_A/B on XNUCLEO-F103RB hardware
-#endif
+	traffic_toggle_color(TRAFFIC_AMBER);
 }
 
-/**
- * @brief Toggle Green LEDs in both directions (2Hz blinking mode), others OFF.
- */
 void toggleGreen(void) {
-#ifdef LAB4_6PIN_HARDWARE
-	HAL_GPIO_WritePin(GPIOA, RED1_Pin | YELLOW1_Pin | RED2_Pin | YELLOW2_Pin, GPIO_PIN_SET);
-	HAL_GPIO_TogglePin(GPIOA, GREEN1_Pin | GREEN2_Pin);
-#else
-	// TODO: Toggle Green state on TL1_A/B and TL2_A/B on XNUCLEO-F103RB hardware
-#endif
+	traffic_toggle_color(TRAFFIC_GREEN);
 }

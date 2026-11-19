@@ -23,13 +23,14 @@
 /* USER CODE BEGIN Includes */
 #include "scheduler.h"
 #include "software_timer.h"
-#include "led7seg.h"
 #include "button.h"
 #include "global.h"
 #include "traffic_light.h"
+#include "dht20.h"
+#include "lcd.h"
+#include "fsm_automatic.h"
 #include "fsm_manual.h"
 #include "fsm_setting.h"
-#include "fsm_automatic.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,13 +71,7 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void scan7SEG(void) {
-	update7SEG(index_led);
-	index_led++;
-	if (index_led >= MAX_LED) {
-		index_led = 0;
-	}
-}
+
 /* USER CODE END 0 */
 
 /**
@@ -112,15 +107,20 @@ int main(void)
   MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+	lcd_init();
+	dht20_init();
+	lcd_show_boot_msg();
 	fsm_automatic_init();
 	setTimer(1, 250);
 	SCH_Init();
 	SCH_Add_Task(timer_run, 0, 10);
 	SCH_Add_Task(button_reading, 0, 10);
-	SCH_Add_Task(fsm_manual, 0, 10);
 	SCH_Add_Task(fsm_automatic, 0, 10);
+	SCH_Add_Task(fsm_manual, 0, 10);
 	SCH_Add_Task(fsm_setting, 0, 10);
-	SCH_Add_Task(scan7SEG, 0, 250);
+	SCH_Add_Task(dht20_read, 50, 50);
+	SCH_Add_Task(lcd_update, 100, 100);
+	SCH_Add_Task(lcd_clear_boot_msg, 1500, 0); // One-shot task (Period = 0)
 	HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 

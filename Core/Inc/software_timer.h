@@ -10,10 +10,13 @@ extern int timer_flag[MAX_TIMER];
 /**
  * @brief Set timer duration in milliseconds.
  *        Ticks are automatically calculated as duration / TIMER_CYCLE.
- *        If TIMER_CYCLE changes (e.g., from 10ms to 1ms or 50ms),
- *        the duration remains correct across the system.
  */
 void setTimer(int index, int duration);
+
+/**
+ * @brief Clear timer counter and flag for a channel.
+ */
+void clearTimer(int index);
 
 /**
  * @brief Set the hardware timer interrupt cycle in milliseconds.
@@ -21,7 +24,7 @@ void setTimer(int index, int duration);
 void setTimerCycle(int cycle_ms);
 
 /**
- * @brief Run timer countdown, called every timer interrupt.
+ * @brief Run timer countdown, called every timer tick.
  */
 void timer_run(void);
 
